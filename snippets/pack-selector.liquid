@@ -1,0 +1,122 @@
+{%- comment -%}
+  Pack selector
+  -------------
+  Links products that are the same item sold in different pack sizes (1 / 2 / 3-pack...)
+  and shows the price per unit and the saving against the single unit.
+
+  Each pack is its own product (own URL, images, SEO and inventory), which is usually what
+  the business wants for bundles, but the customer sees them as one choice.
+
+  Metafields on every product in the group:
+  - custom.pack_group  list.product_reference  all packs, in display order (include the product itself)
+  - custom.pack_size   number_integer          units in this pack (defaults to 1)
+  - custom.pack_label  single_line_text_field  optional label, e.g. "Best value"
+
+  Usage, e.g. in a "Custom liquid" block of the product section:
+    {% render 'pack-selector', product: product %}
+
+  Plain links, no JavaScript. Renders nothing for products without a pack group.
+{%- endcomment -%}
+
+{%- liquid
+  assign packs = product.metafields.custom.pack_group.value
+
+  # Reference price per unit: the pack with the smallest pack size.
+  assign reference_size = 0
+  assign reference_unit_price = 0
+  for pack in packs
+    assign size = pack.metafields.custom.pack_size.value | default: 1
+    if reference_size == 0 or size < reference_size
+      assign reference_size = size
+      assign reference_unit_price = pack.price | divided_by: size | floor
+    endif
+  endfor
+-%}
+
+{%- if packs.size > 1 -%}
+  <nav class="pack-selector" aria-label="Pack size">
+    <p class="pack-selector__legend">Pack size</p>
+    <ul class="pack-selector__list" role="list">
+      {%- for pack in packs -%}
+        {%- liquid
+          assign size = pack.metafields.custom.pack_size.value | default: 1
+          assign unit_price = pack.price | divided_by: size | floor
+          assign full_price = reference_unit_price | times: size
+          assign saving_percent = 0
+          if full_price > pack.price
+            assign saving_percent = full_price | minus: pack.price | times: 100 | divided_by: full_price | floor
+          endif
+          assign is_current = false
+          if pack.id == product.id
+            assign is_current = true
+          endif
+        -%}
+        <li>
+          <a
+            href="{{ pack.url }}"
+            class="pack-selector__option{% if is_current %} is-current{% endif %}{% unless pack.available %} is-sold-out{% endunless %}"
+            {% if is_current %}
+              aria-current="page"
+            {% endif %}
+          >
+            {%- if pack.metafields.custom.pack_label != blank -%}
+              <span class="pack-selector__badge">{{ pack.metafields.custom.pack_label | escape }}</span>
+            {%- endif -%}
+            <span class="pack-selector__size">{{ size }} {% if size == 1 %}unit{% else %}units{% endif %}</span>
+            <span class="pack-selector__price">{{ pack.price | money }}</span>
+            {%- if size > 1 -%}
+              <span class="pack-selector__unit">{{ unit_price | money }} / unit</span>
+            {%- endif -%}
+            {%- if saving_percent > 0 -%}
+              <span class="pack-selector__saving">Save {{ saving_percent }}%</span>
+            {%- endif -%}
+            {%- unless pack.available -%}
+              <span class="pack-selector__unit">Sold out</span>
+            {%- endunless -%}
+          </a>
+        </li>
+      {%- endfor -%}
+    </ul>
+  </nav>
+
+  <style>
+    .pack-selector { margin: 1.5rem 0; }
+    .pack-selector__legend { margin: 0 0 0.6rem; font-weight: 600; }
+    .pack-selector__list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+      gap: 0.8rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .pack-selector__option {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      height: 100%;
+      padding: 1.2rem 1rem 1rem;
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      border-radius: 6px;
+      color: inherit;
+      text-decoration: none;
+    }
+    .pack-selector__option:hover { border-color: currentColor; }
+    .pack-selector__option.is-current { border: 2px solid currentColor; }
+    .pack-selector__option.is-sold-out { opacity: 0.55; }
+    .pack-selector__badge {
+      position: absolute;
+      top: -0.7rem;
+      left: 0.8rem;
+      padding: 0.1rem 0.5rem;
+      border-radius: 3px;
+      background: #111;
+      color: #fff;
+      font-size: 0.75em;
+    }
+    .pack-selector__size { font-weight: 600; }
+    .pack-selector__unit { font-size: 0.85em; opacity: 0.75; }
+    .pack-selector__saving { font-size: 0.85em; font-weight: 600; color: #1a7f37; }
+  </style>
+{%- endif -%}

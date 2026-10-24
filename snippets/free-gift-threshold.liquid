@@ -1,0 +1,40 @@
+{%- comment -%}
+  Free gift above a cart value
+  ----------------------------
+  Adds a gift product to the cart when the spend on the other items reaches a threshold,
+  removes it when the cart drops below, and keeps its quantity at 1.
+  If the customer removes the gift themselves, it is not added back for the rest of the visit.
+
+  The script only manages the cart line. The price must be made 0 by Shopify itself, with an
+  automatic discount (Buy X get Y: minimum purchase amount -> the gift product, 100% off),
+  so checkout stays correct even with JavaScript disabled. See docs/free-gift-setup.md.
+
+  Render once, in layout/theme.liquid before </body>:
+    {% render 'free-gift-threshold', gift_handle: 'free-tote-bag', threshold: 5000 %}
+
+  Parameters:
+  - gift_handle        handle of the gift product
+  - threshold          amount in the store's default currency, in major units (5000 = 5,000.00)
+  - refresh_sections   optional, which theme sections to re-render after the script changes the cart
+                       (format "section-id:#selector,section-id:#selector"; the default matches Dawn)
+
+  To switch the offer off, set the gift product to Draft: the script is not output at all.
+{%- endcomment -%}
+
+{%- liquid
+  assign gift_product = all_products[gift_handle]
+  assign gift_variant = gift_product.selected_or_first_available_variant
+  assign threshold_cents = threshold | times: 100
+  assign refresh_sections = refresh_sections | default: 'cart-drawer:#CartDrawer,cart-icon-bubble:#cart-icon-bubble'
+-%}
+
+{%- if gift_variant and gift_variant.available and threshold_cents > 0 -%}
+  <script type="application/json" id="free-gift-config">
+    {
+      "variantId": {{ gift_variant.id }},
+      "threshold": {{ threshold_cents }},
+      "refreshSections": {{ refresh_sections | json }}
+    }
+  </script>
+  <script src="{{ 'free-gift-threshold.js' | asset_url }}" defer="defer"></script>
+{%- endif -%}
